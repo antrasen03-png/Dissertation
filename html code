@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annapurna Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        :root { --primary: #28a745; --bg-light: #f8f9fa; --text-dark: #333; --border: #ddd; --action: #007bff; }
+        
+        body { display: flex; height: 100vh; background-color: var(--bg-light); color: var(--text-dark); }
+
+        .sidebar { width: 250px; background: white; border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
+        .sidebar h2 { margin-bottom: 30px; font-size: 1.8rem; color: var(--primary); letter-spacing: 1px; }
+        .sidebar-nav { display: flex; flex-direction: column; gap: 15px; flex-grow: 1; }
+        .nav-btn { text-align: left; padding: 12px 15px; border: none; background: transparent; font-size: 1rem; cursor: pointer; border-radius: 6px; transition: 0.2s; }
+        .nav-btn:hover { background: var(--bg-light); }
+        .nav-btn.active { background: var(--primary); color: white; font-weight: bold; }
+        
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header { height: 70px; background: white; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end; padding: 0 30px; gap: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        
+        .content-area { padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow-y: auto; height: 100%; }
+        
+        .tab-section { display: none; width: 100%; max-width: 800px; text-align: center; }
+        .tab-section.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        #webcam-container canvas { border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); border: 3px solid white; margin-top: 15px; }
+        
+        /* New Fruit Data Card */
+        #portion-guidance { margin: 20px auto 0; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-top: 5px solid var(--primary); border-radius: 8px; font-size: 1.1em; display: none; width: 100%; text-align: left; overflow: hidden; }
+        .data-header { background: var(--primary); color: white; padding: 15px; font-size: 1.3em; font-weight: bold; display: flex; justify-content: space-between; }
+        .data-body { padding: 20px; }
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .data-box { background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
+        .bmi-advice { background: #e2f0d9; padding: 15px; border-radius: 6px; border-left: 4px solid var(--primary); margin-top: 15px; font-weight: bold; }
+        
+        .log-status { color: var(--primary); font-size: 1em; margin-top: 15px; font-weight: bold; height: 24px; }
+        
+        .profile-form { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: left; margin-top: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; }
+        
+        .bmi-card { background: #e9ecef; padding: 20px; border-radius: 8px; margin-top: 20px; text-align: center; display: none; }
+        .bmi-value { font-size: 2.5rem; font-weight: bold; color: var(--primary); }
+        .bmi-category { font-size: 1.2rem; font-weight: bold; margin-top: 5px; }
+
+        .btn { color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 1.1rem; cursor: pointer; font-weight: bold; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: 5px; }
+        .btn-start { background: var(--primary); }
+        .btn-submit { background: var(--action); display: none; font-size: 1.2rem; padding: 15px 30px; }
+        .btn-save { background: var(--text-dark); width: 100%; margin-top: 10px; }
+        .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    </style>
+</head>
+<body onload="initializeSystem()">
+
+    <aside class="sidebar">
+        <h2>Annapurna</h2>
+        <nav class="sidebar-nav">
+            <button class="nav-btn active" onclick="switchTab('scan', this)">📷 Scan Fruit</button>
+            <button class="nav-btn" onclick="switchTab('profile', this)">👤 My BMI Profile</button>
+            <button class="nav-btn" onclick="switchTab('history', this)">📊 Database Stats</button>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="header">
+            <span id="db-status" style="color: #d9a000; font-weight:bold; margin-right:auto;">⏳ Fetching Cloud Data...</span>
+            <span id="user-greeting" style="font-weight: bold; color: var(--text-dark);">Guest Profile</span>
+        </header>
+
+        <section class="content-area">
+            
+            <div id="scan" class="tab-section active">
+                <h2 style="margin-bottom: 10px;">AI Fruit Scanner</h2>
+                <p style="color: #666;">Turn on the camera, align the fruit, and click Submit to pull live data.</p>
+                
+                <button type="button" id="startBtn" class="btn btn-start" onclick="initCamera()">Turn On Camera</button>
+                
+                <div id="webcam-container"></div>
+                
+                <button type="button" id="submitBtn" class="btn btn-submit" onclick="captureAndSubmit()">✔️ Submit & Analyze</button>
+                
+                <!-- Dynamic Data Card -->
+                <div id="portion-guidance">
+                    <div class="data-header">
+                        <span id="card-title">Fruit Name</span>
+                        <span id="card-match">0% Match</span>
+                    </div>
+                    <div class="data-body">
+                        <div class="data-grid">
+                            <div class="data-box"><strong>🔥 Calories:</strong> <span id="card-cal">--</span></div>
+                            <div class="data-box"><strong>💊 Vitamins:</strong> <span id="card-vit">--</span></div>
+                        </div>
+                        <div class="data-box" style="margin-bottom: 15px;"><strong>✨ Benefits:</strong> <span id="card-ben">--</span></div>
+                        
+                        <div class="bmi-advice">
+                            <div style="font-size:0.8em; color:#666; text-transform:uppercase;">Custom Portion for <span id="card-bmi-cat">Your BMI</span></div>
+                            <span id="card-advice">Loading advice...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="log-status" class="log-status"></div>
+            </div>
+
+            <div id="profile" class="tab-section">
+                <h2>User Profile & BMI Calculator</h2>
+                <div class="profile-form">
+                    <div class="form-group"><label>Full Name</label><input type="text" id="p-name"></div>
+                    <div style="display: flex; gap: 15px;">
+                        <div class="form-group" style="flex: 1;"><label>Height (cm)</label><input type="number" id="p-height"></div>
+                        <div class="form-group" style="flex: 1;"><label>Weight (kg)</label><input type="number" id="p-weight"></div>
+                    </div>
+                    <button class="btn btn-save" onclick="saveProfile()">Save & Calculate BMI</button>
+                </div>
+                <div id="bmi-card" class="bmi-card">
+                    <div>Your Current BMI</div>
+                    <div class="bmi-value" id="bmi-display">0.0</div>
+                    <div class="bmi-category" id="bmi-category">Category</div>
+                </div>
+            </div>
+
+            <div id="history" class="tab-section">
+                <h2>Database Connection</h2>
+                <a href="https://docs.google.com/spreadsheets/d/11tja4wiqPyCUT5yR5RsSLQjmccRPQNisnQlD5fxtGh0/edit" target="_blank" class="btn btn-start" style="text-decoration:none; display:inline-block; margin-top:20px;">Open Google Sheet</a>
+            </div>
+
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    
+    <script type="text/javascript">
+        // --- CONFIGURATION ---
+        const MODEL_URL = "https://teachablemachine.withgoogle.com/models/jZdMwxNLn/";
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyE9Ee1mKtnNK-7LdJjMunQy62MuL8oKbTipKgw7HNWJqBkpoFIOzAky29-5fn3EErApg/exec"; 
+
+        let model, webcam, maxPredictions;
+        let currentUserData = { bmi: 0, category: "Normal" }; 
+        let cloudDatabase = []; // Will hold the Google Sheets data
+
+        function switchTab(tabId, btnElement) {
+            document.querySelectorAll('.tab-section').forEach(sec => sec.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        // --- INIT & FETCH DATA ---
+        function initializeSystem() {
+            loadProfile();
+            fetchCloudData();
+        }
+
+        async function fetchCloudData() {
+            try {
+                const response = await fetch(APPS_SCRIPT_URL);
+                cloudDatabase = await response.json();
+                document.getElementById('db-status').innerText = "🟢 Cloud DB Connected";
+                document.getElementById('db-status').style.color = "#28a745";
+            } catch (error) {
+                console.error("Database fetch failed", error);
+                document.getElementById('db-status').innerText = "🔴 Cloud DB Disconnected";
+                document.getElementById('db-status').style.color = "red";
+            }
+        }
+
+        // --- PROFILE LOGIC ---
+        function saveProfile() {
+            const name = document.getElementById('p-name').value;
+            const heightCm = parseFloat(document.getElementById('p-height').value);
+            const weightKg = parseFloat(document.getElementById('p-weight').value);
+            if(!heightCm || !weightKg) { alert("Please enter Height and Weight."); return; }
+            
+            const bmi = (weightKg / ((heightCm/100) ** 2)).toFixed(1);
+            let category = "Normal";
+            let catColor = "#28a745"; 
+            
+            if (bmi < 18.5) { category = "Underweight"; catColor = "#ffc107"; } 
+            else if (bmi >= 25 && bmi < 29.9) { category = "Overweight"; catColor = "#fd7e14"; } 
+            else if (bmi >= 30) { category = "Obese"; catColor = "#dc3545"; } 
+
+            currentUserData = { name: name, bmi: bmi, category: category };
+            localStorage.setItem('annapurnaProfile', JSON.stringify(currentUserData));
+            updateProfileUI(name, bmi, category, catColor);
+        }
+
+        function loadProfile() {
+            const saved = localStorage.getItem('annapurnaProfile');
+            if(saved) {
+                currentUserData = JSON.parse(saved);
+                document.getElementById('p-name').value = currentUserData.name || "";
+                let catColor = "#28a745";
+                if (currentUserData.bmi < 18.5) catColor = "#ffc107";
+                else if (currentUserData.bmi >= 25) catColor = "#fd7e14";
+                updateProfileUI(currentUserData.name, currentUserData.bmi, currentUserData.category, catColor);
+            }
+        }
+
+        function updateProfileUI(name, bmi, category, color) {
+            document.getElementById('user-greeting').innerText = name ? `${name}'s Profile` : "My Profile";
+            document.getElementById('bmi-card').style.display = "block";
+            document.getElementById('bmi-display').innerText = bmi;
+            document.getElementById('bmi-display').style.color = color;
+            document.getElementById('bmi-category').innerText = `Status: ${category}`;
+        }
+
+        // --- ML LOGIC ---
+        async function initCamera() {
+            const startBtn = document.getElementById("startBtn");
+            startBtn.disabled = true;
+            startBtn.innerText = "Loading AI...";
+
+            try {
+                model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+                maxPredictions = model.getTotalClasses();
+                webcam = new tmImage.Webcam(640, 480, true); 
+                await webcam.setup(); 
+                await webcam.play();
+                window.requestAnimationFrame(loop);
+
+                const webcamContainer = document.getElementById("webcam-container");
+                webcamContainer.innerHTML = ""; 
+                webcamContainer.appendChild(webcam.canvas);
+                
+                startBtn.style.display = "none"; 
+                document.getElementById("submitBtn").style.display = "inline-block";
+            } catch (error) {
+                alert("Camera error.");
+            }
+        }
+
+        async function loop() {
+            webcam.update(); 
+            window.requestAnimationFrame(loop);
+        }
+
+        async function captureAndSubmit() {
+            if(!currentUserData.bmi) { alert("Please complete your BMI Profile first!"); return; }
+
+            const submitBtn = document.getElementById("submitBtn");
+            submitBtn.disabled = true; submitBtn.innerText = "Analyzing...";
+
+            const prediction = await model.predict(webcam.canvas);
+            let highestProb = 0; let bestClass = "";
+
+            for (let i = 0; i < maxPredictions; i++) {
+                if (prediction[i].probability > highestProb) {
+                    highestProb = prediction[i].probability;
+                    bestClass = prediction[i].className;
+                }
+            }
+            
+            displayCloudData(bestClass, Math.round(highestProb * 100) + "%");
+            logToDatabase(bestClass, highestProb);
+
+            setTimeout(() => {
+                submitBtn.disabled = false; submitBtn.innerText = "✔️ Submit & Analyze";
+            }, 2000);
+        }
+
+        // --- DISPLAY DATA FROM CLOUD ---
+        function displayCloudData(fruitName, percent) {
+            const card = document.getElementById("portion-guidance");
+            
+            // Search the fetched Google Sheet data for the scanned fruit
+            const fruitData = cloudDatabase.find(item => item.fruit.toLowerCase() === fruitName.toLowerCase());
+
+            if(fruitData) {
+                document.getElementById("card-title").innerText = fruitData.fruit;
+                document.getElementById("card-match").innerText = percent + " Match";
+                document.getElementById("card-cal").innerText = fruitData.calories || "N/A";
+                document.getElementById("card-vit").innerText = fruitData.vitamins || "N/A";
+                document.getElementById("card-ben").innerText = fruitData.benefits || "N/A";
+                
+                document.getElementById("card-bmi-cat").innerText = currentUserData.category;
+                
+                // Select advice based on BMI
+                let specificAdvice = fruitData.normal_advice; 
+                if(currentUserData.category === "Underweight") specificAdvice = fruitData.underweight_advice;
+                if(currentUserData.category === "Overweight" || currentUserData.category === "Obese") specificAdvice = fruitData.overweight_advice;
+                
+                document.getElementById("card-advice").innerText = specificAdvice || "No specific advice found.";
+            } else {
+                // Fallback if fruit is not in sheet yet
+                document.getElementById("card-title").innerText = fruitName;
+                document.getElementById("card-advice").innerText = "Data for this fruit is not yet added to your Google Sheet.";
+            }
+            
+            card.style.display = "block";
+        }
+
+        function logToDatabase(fruitName, confidence) {
+            document.getElementById("log-status").innerText = `Syncing log to Google Sheets...`;
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fruit: fruitName, confidence: confidence, user: currentUserData.name, bmi_category: currentUserData.category })
+            }).then(() => {
+                document.getElementById("log-status").innerText = `✅ Log Saved!`;
+                setTimeout(() => { document.getElementById("log-status").innerText = ""; }, 3000); 
+            });
+        }
+    </script>
+</body>
+</html>
